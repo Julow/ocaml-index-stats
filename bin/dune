@@ -1,0 +1,8 @@
+(executable
+ (name main)
+ (libraries
+  compiler-libs
+  merlin-lib.index_format
+  merlin-lib.ocaml_typing
+  ocaml_index_utils
+  fs_utils))
