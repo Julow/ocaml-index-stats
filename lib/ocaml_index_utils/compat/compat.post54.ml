@@ -2,10 +2,6 @@ let merlin_lid =
   let open Merlin_index_format.Index_format in
   Lid.to_list
 
-let tpat_alias_ident = function
-  | Ocaml_typing.Typedtree.Tpat_alias (_, ident, _, _, _) -> Some ident
-  | _ -> None
-
 let sub_locs_of_ident =
   let rec collect acc = function
     | Longident.Lident _ -> []

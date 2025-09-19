@@ -8,7 +8,11 @@ let scan_local_cmts ~dune_build_dir =
   in
   Fs_utils.scan_dir ~descend_into
     (fun acc f ->
-      if Filename.extension f = ".cmt" then Fpath.v f :: acc else acc)
+      if Filename.extension f = ".cmt" then
+        match Ocaml_shape_utils.cmt_of_path (Fpath.v f) with
+        | Some cmt -> cmt :: acc
+        | None -> acc
+      else acc)
     [] dune_build_dir
 
 let () =
