@@ -19,8 +19,7 @@ let () =
   (* let open Merlin_index_format.Index_format in *)
   let dune_build_dir = Filename.concat root_dir "_build" in
   let cmts = scan_local_cmts ~dune_build_dir in
-  let units _ = true in
-  let occs = Ocaml_index_utils.occurrences ~dune_build_dir ~cmts ~units in
+  let occs = Ocaml_index_utils.occurrences ~dune_build_dir ~cmts in
   Format.printf "%d occurrences of %d units\n%!" (List.length occs)
     (List.length cmts);
   Stats.Per_function_per_module.(compute occs |> pp Format.std_formatter)

@@ -15,6 +15,10 @@ let scan_dune_build_path ~dune_build_dir =
       | [] -> failwith "No index found. Please run 'dune build @ocaml-index'."
       | p -> p)
 
+let uid_of_unit_name u =
+  let open Ocaml_typing in
+  Shape.Uid.of_compilation_unit_id (Ident.create_persistent u)
+
 (** For a UID, lookup the corresponding unit and identifier. *)
 let lookup_ident ~cmts =
   let open Ocaml_typing in
@@ -23,9 +27,7 @@ let lookup_ident ~cmts =
   List.iter
     (fun cmt ->
       let unit_name = Ocaml_shape_utils.unit_name cmt in
-      Tbl.replace tbl
-        (Shape.Uid.of_compilation_unit_id (Ident.create_persistent unit_name))
-        (`Found (unit_name, ""));
+      Tbl.replace tbl (uid_of_unit_name unit_name) (`Found (unit_name, ""));
       List.iter
         (fun (uid, ident, _decl) ->
           let res =
@@ -46,9 +48,13 @@ let lookup_ident ~cmts =
 (* Format.fprintf ppf "@[<hv 2>%a:@ %a@]" Pprintast.longident txt
    Location.print_loc loc *)
 
-(* Read the index files and extract all occurrences of [units]. *)
-let extract_occurrences_of_unit ~units ~lookup_ident paths =
+(* Read the index files in [paths] and extract occurrences informations for
+   declarations that match [lookup_ident]. *)
+let extract_occurrences_of_unit ~lookup_ident paths =
   let open Merlin_index_format.Index_format in
+  let is_unit_we_care_about u =
+    match lookup_ident (uid_of_unit_name u) with `Found _ -> true | _ -> false
+  in
   if paths = [] then failwith "Found no index files in '_build'.";
   List.fold_left
     (fun acc file ->
@@ -65,7 +71,7 @@ let extract_occurrences_of_unit ~units ~lookup_ident paths =
               | `Ignore -> (* Not a value *) acc
               | `Not_found -> (
                   match uid with
-                  | Item it when units it.comp_unit ->
+                  | Item it when is_unit_we_care_about it.comp_unit ->
                       Format.eprintf
                         "@[<hv 2>Warning:@ No ident for uid %s.%d:@ %d \
                          occurrences@]@\n\
@@ -79,7 +85,7 @@ let extract_occurrences_of_unit ~units ~lookup_ident paths =
       | _ -> acc)
     [] paths
 
-let occurrences ~dune_build_dir ~cmts ~units =
+let occurrences ~dune_build_dir ~cmts =
   let paths = scan_dune_build_path ~dune_build_dir in
   let lookup_ident = lookup_ident ~cmts in
-  extract_occurrences_of_unit ~units ~lookup_ident paths
+  extract_occurrences_of_unit ~lookup_ident paths
