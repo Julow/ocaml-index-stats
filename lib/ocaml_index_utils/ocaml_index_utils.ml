@@ -1,4 +1,6 @@
-(* open Ocaml_parsing *)
+open Ocaml_parsing
+
+type occurrences = ((string * string) * Longident.t Location.loc) list
 
 let fail fmt = Printf.ksprintf failwith fmt
 
@@ -26,7 +28,7 @@ let lookup_ident ~cmts =
   let tbl = Tbl.create 256 in
   List.iter
     (fun cmt ->
-      let unit_name = Ocaml_shape_utils.unit_name cmt in
+      let unit_name = cmt.Ocaml_shape_utils.unit_name in
       Tbl.replace tbl (uid_of_unit_name unit_name) (`Found (unit_name, ""));
       List.iter
         (fun (uid, ident, _decl) ->
@@ -36,7 +38,7 @@ let lookup_ident ~cmts =
             | None -> `Ignore
           in
           Tbl.replace tbl uid res)
-        (Ocaml_shape_utils.declarations cmt))
+        cmt.Ocaml_shape_utils.decls)
     cmts;
   fun uid ->
     match Tbl.find_opt tbl uid with

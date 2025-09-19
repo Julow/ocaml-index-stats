@@ -28,7 +28,7 @@ module Decl = struct
   let of_ocaml_decl uid d : t = (uid, ident_of_decl d, d)
 end
 
-type cmt = string * Fpath.t * Decl.t list
+type cmt = { unit_name : string; path : Fpath.t; decls : Decl.t list }
 
 let read_cmt cmt : Decl.t list =
   let module Tbl = Shape.Uid.Tbl in
@@ -52,10 +52,10 @@ let unit_name_of_path p =
 (* [.cmt] files in packages with names [packages]. Uses [ocamlfind]. *)
 let cmts_of_packages ~packages ~units : cmt list =
   let acc_matching_cmts acc fname =
-    let p = Fpath.v fname in
-    let unit_name = unit_name_of_path p in
+    let path = Fpath.v fname in
+    let unit_name = unit_name_of_path path in
     if Filename.extension fname = ".cmt" && units unit_name then
-      (unit_name, p, read_cmt fname) :: acc
+      { unit_name; path; decls = read_cmt fname } :: acc
     else acc
   in
   let cmts =
@@ -71,8 +71,6 @@ let cmts_of_packages ~packages ~units : cmt list =
   cmts
 
 let cmt_of_path path =
-  try Some (unit_name_of_path path, path, read_cmt (Fpath.to_string path))
+  let unit_name = unit_name_of_path path in
+  try Some { unit_name; path; decls = read_cmt (Fpath.to_string path) }
   with _ -> None
-
-let unit_name (n, _, _) = n
-let declarations (_, _, d) = d

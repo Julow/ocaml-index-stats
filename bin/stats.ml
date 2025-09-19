@@ -1,45 +1,92 @@
 open Ocaml_parsing
-
-type occs = ((string * string) * Longident.t Location.loc) list
-(** See {!Ocaml_index_utils}. *)
-
+open Ocaml_typing
 module SM = Map.Make (String)
 
-module Per_function_per_module = struct
-  type t = (int * Fpath.Set.t) SM.t SM.t
+module Per_declaration = struct
+  module Occ = struct
+    type t = string * string
 
-  let get_fun_map mod_map unit =
-    try SM.find unit mod_map with Not_found -> SM.empty
+    let hash = Hashtbl.hash
+    let equal = Stdlib.( = )
+  end
 
-  let get_fun fun_map fun_name =
-    try SM.find fun_name fun_map with Not_found -> (0, Fpath.Set.empty)
+  module OccTbl = Hashtbl.Make (Occ)
 
-  let compute (occs : occs) : t =
-    List.fold_left
-      (fun mod_map ((unit, fun_name), { Location.txt = _; loc }) ->
-        let fun_map = get_fun_map mod_map unit in
-        let n, occ_l = get_fun fun_map fun_name in
-        let fun_map =
-          SM.add fun_name
-            ( n + 1,
-              Fpath.Set.add (Fpath.v loc.Location.loc_start.pos_fname) occ_l )
-            fun_map
+  type decl = {
+    d_ident : string;
+    d_occur : (int * Fpath.Set.t) option;
+    d_decl : Typedtree.item_declaration;
+  }
+
+  type module_ = string * Fpath.t * decl list
+  type t = module_ list
+
+  let compute_decl unit_name occ_numbers (uid, ident_opt, tdecl) =
+    let d_ident =
+      match ident_opt with
+      | Some id -> Ident.name id
+      | None -> Format.asprintf "%a" Shape.Uid.print uid
+    in
+    let d_occur = OccTbl.find_opt occ_numbers (unit_name, d_ident) in
+    { d_ident; d_occur; d_decl = tdecl }
+
+  let compute_occurs_number occs =
+    let occ_numbers = OccTbl.create 64 in
+    List.iter
+      (fun (k, loc) ->
+        let n, paths =
+          try OccTbl.find occ_numbers k with Not_found -> (0, Fpath.Set.empty)
         in
-        SM.add unit fun_map mod_map)
-      SM.empty occs
+        let p = Fpath.v loc.Location.loc.loc_start.pos_fname in
+        OccTbl.replace occ_numbers k (n + 1, Fpath.Set.add p paths))
+      occs;
+    occ_numbers
+
+  let compute (cmts : Ocaml_shape_utils.cmt list)
+      (occs : Ocaml_index_utils.occurrences) =
+    let occ_numbers = compute_occurs_number occs in
+    List.map
+      (fun { Ocaml_shape_utils.unit_name; path; decls } ->
+        (unit_name, path, List.map (compute_decl unit_name occ_numbers) decls))
+      cmts
+
+  let pf ppf fmt = Format.fprintf ppf fmt
+  let pp_noop _ _ = ()
+
+  let decl_kind_to_string = function
+    | Typedtree.Value _ | Value_binding _ -> "val"
+    | Type _ -> "type"
+    | Constructor _ -> "cstr"
+    | Extension_constructor _ -> "cext"
+    | Module _ | Module_substitution _ | Module_binding _ -> "module"
+    | Module_type _ -> "module type"
+    | Class _ -> "class"
+    | Class_type _ -> "class type"
+    | Label _ -> "field"
+
+  let pp_occurrences ppf = function
+    | Some (n_occurs, path_occurs) ->
+        let n_paths = Fpath.Set.cardinal path_occurs in
+        pf ppf "%d occurrences in %d modules: %a" n_occurs n_paths
+          (if n_paths < 5 then Fpath.Set.dump else pp_noop)
+          path_occurs
+    | None -> pf ppf "no occurrences found"
+
+  let pp_decl ~max_width ppf d =
+    pf ppf "@[<hv 2>%6s %-*s %a@]"
+      (decl_kind_to_string d.d_decl)
+      max_width d.d_ident pp_occurrences d.d_occur
 
   let pp ppf t =
-    SM.iter
-      (fun mod_name fun_map ->
-        Format.fprintf ppf "@[<v 2>Occurrences of module %s:" mod_name;
-        SM.iter
-          (fun fun_name (n, occ_l) ->
-            let occ_n = Fpath.Set.cardinal occ_l in
-            Format.fprintf ppf "@ @[<hv 2>- %-24s %d occurrences in %d module"
-              fun_name n occ_n;
-            if occ_n < 5 then Format.fprintf ppf "@ %a" Fpath.Set.dump occ_l;
-            Format.fprintf ppf "@]")
-          fun_map;
-        Format.fprintf ppf "@]@ ")
+    List.iter
+      (fun (unit_name, path, decls) ->
+        let max_width =
+          List.fold_left
+            (fun acc d -> max acc (String.length d.d_ident))
+            0 decls
+        in
+        pf ppf "@[<v 2>module %s (at %a)@ %a@]@," unit_name Fpath.pp path
+          (Format.pp_print_list (pp_decl ~max_width))
+          decls)
       t
 end
