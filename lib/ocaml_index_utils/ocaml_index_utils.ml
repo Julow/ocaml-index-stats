@@ -45,10 +45,9 @@ let lookup_ident ~cmts =
     | Some ((`Found _ | `Ignore) as r) -> r
     | None -> `Not_found
 
-(* let pp_ocaml_lid ppf lid = *)
-(*   let { Location.txt; loc } = Compat.merlin_lid lid in *)
-(* Format.fprintf ppf "@[<hv 2>%a:@ %a@]" Pprintast.longident txt
-   Location.print_loc loc *)
+let pp_lid_without_location ppf lid =
+  let { Location.txt; _ } = Compat.merlin_lid lid in
+  Pprintast.longident ppf txt
 
 (* Read the index files in [paths] and extract occurrences informations for
    declarations that match [lookup_ident]. *)
@@ -75,12 +74,14 @@ let extract_occurrences_of_unit ~lookup_ident paths =
                   match uid with
                   | Item it when is_unit_we_care_about it.comp_unit ->
                       Format.eprintf
-                        "@[<hv 2>Warning:@ No ident for uid %s.%d:@ %d \
-                         occurrences@]@\n\
+                        "@[<hov 2>Warning:@ No ident for uid %s.%d@ (%d \
+                         occurrences):@ @[<hov>%a@]@]@\n\
                          %!"
                         it.comp_unit it.id (Lid_set.cardinal locs)
-                      (* (Format.pp_print_list pp_ocaml_lid) *)
-                      (* (Lid_set.elements locs) *);
+                        Format.(
+                          pp_print_list ~pp_sep:pp_print_space
+                            pp_lid_without_location)
+                        (Lid_set.elements locs);
                       acc
                   | _ -> acc))
             index.defs acc
