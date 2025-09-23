@@ -53,17 +53,6 @@ module Per_declaration = struct
   let pf ppf fmt = Format.fprintf ppf fmt
   let pp_noop _ _ = ()
 
-  let decl_kind_to_string = function
-    | Typedtree.Value _ | Value_binding _ -> "val"
-    | Type _ -> "type"
-    | Constructor _ -> "cstr"
-    | Extension_constructor _ -> "cext"
-    | Module _ | Module_substitution _ | Module_binding _ -> "module"
-    | Module_type _ -> "module type"
-    | Class _ -> "class"
-    | Class_type _ -> "class type"
-    | Label _ -> "field"
-
   let pp_occurrences ppf = function
     | Some (n_occurs, path_occurs) ->
         let n_paths = Fpath.Set.cardinal path_occurs in
@@ -74,7 +63,7 @@ module Per_declaration = struct
 
   let pp_decl ~max_width ppf d =
     pf ppf "@[<hv 2>%6s %-*s %a@]"
-      (decl_kind_to_string d.d_decl)
+      (Ocaml_shape_utils.Decl.decl_kind_to_string d.d_decl)
       max_width d.d_ident pp_occurrences d.d_occur
 
   let pp ppf t =

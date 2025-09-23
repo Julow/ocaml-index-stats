@@ -2,6 +2,9 @@ open Ocaml_typing
 
 module Decl : sig
   type t = Shape.Uid.t * Ident.t option * Typedtree.item_declaration
+
+  val decl_kind_to_string : Typedtree.item_declaration -> string
+  val pp : Format.formatter -> t -> unit
 end
 
 type cmt = { unit_name : string; path : Fpath.t; decls : Decl.t list }
@@ -12,3 +15,4 @@ val cmts_of_packages :
     return [false] are not collected. Uses [ocamlfind]. *)
 
 val cmt_of_path : Fpath.t -> cmt option
+val pp : Format.formatter -> cmt -> unit

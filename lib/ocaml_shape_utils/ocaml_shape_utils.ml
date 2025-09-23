@@ -26,6 +26,24 @@ module Decl = struct
     | Module { md_id = None; _ } | Module_binding { mb_id = None; _ } -> None
 
   let of_ocaml_decl uid d : t = (uid, ident_of_decl d, d)
+
+  let decl_kind_to_string = function
+    | Typedtree.Value _ | Value_binding _ -> "val"
+    | Type _ -> "type"
+    | Constructor _ -> "cstr"
+    | Extension_constructor _ -> "cext"
+    | Module _ | Module_substitution _ | Module_binding _ -> "module"
+    | Module_type _ -> "module type"
+    | Class _ -> "class"
+    | Class_type _ -> "class type"
+    | Label _ -> "field"
+
+  let pp ppf (uid, ident_opt, tdecl) =
+    Format.fprintf ppf "@[<hv 2>%a (%a):@ %s@]" Shape.Uid.print uid
+      Format.(
+        pp_print_option ~none:(fun ppf () -> fprintf ppf "no ident") Ident.print)
+      ident_opt
+      (decl_kind_to_string tdecl)
 end
 
 type cmt = { unit_name : string; path : Fpath.t; decls : Decl.t list }
@@ -74,3 +92,9 @@ let cmt_of_path path =
   let unit_name = unit_name_of_path path in
   try Some { unit_name; path; decls = read_cmt (Fpath.to_string path) }
   with _ -> None
+
+let pp ppf { unit_name; path; decls } =
+  Format.fprintf ppf "@[<v 2>%s (at %a) %d decls:@ %a@]" unit_name Fpath.pp path
+    (List.length decls)
+    (Format.pp_print_list Decl.pp)
+    decls
