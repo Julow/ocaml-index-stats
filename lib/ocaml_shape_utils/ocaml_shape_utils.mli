@@ -7,12 +7,30 @@ module Decl : sig
   val pp : Format.formatter -> t -> unit
 end
 
+module Shap : sig
+  (** Not named [Shape] to avoid confusion with the module from merlin's lib,
+      which is also used elsewhere. *)
+
+  type t
+
+  val reduce : t -> Shape.Uid.t option
+  val value : t -> Ident.t -> t
+  val type_ : t -> Ident.t -> t
+  val extension_constructor : t -> Ident.t -> t
+  val class_ : t -> Ident.t -> t
+  val class_type : t -> Ident.t -> t
+  val module_ : t -> Ident.t -> t
+  val module_type : t -> Ident.t -> t
+  val pp : Format.formatter -> t -> unit
+end
+
 type cmt = {
   unit_name : string;
   path : Fpath.t;
   decls : Decl.t list;
   intf : Cmi_format.cmi_infos option;
       (** [None] if a [.mli] is present, unless [~read_cmti:true] is passed. *)
+  shape : Shap.t;
 }
 
 val cmts_of_packages :
