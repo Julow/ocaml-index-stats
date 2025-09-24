@@ -7,12 +7,21 @@ module Decl : sig
   val pp : Format.formatter -> t -> unit
 end
 
-type cmt = { unit_name : string; path : Fpath.t; decls : Decl.t list }
+type cmt = {
+  unit_name : string;
+  path : Fpath.t;
+  decls : Decl.t list;
+  intf : Cmi_format.cmi_infos option;
+      (** [None] if a [.mli] is present, unless [~read_cmti:true] is passed. *)
+}
 
 val cmts_of_packages :
   packages:string list -> units:(string -> bool) -> cmt list
 (** Path to the [.cmt] in the given packages. Cmts for which [units "Unit_name"]
     return [false] are not collected. Uses [ocamlfind]. *)
 
-val cmt_of_path : Fpath.t -> cmt option
+val cmt_of_path : ?read_cmti:bool -> Fpath.t -> cmt option
+(** If [~read_cmti] is [true] (defaults to [false]), the corresponding [cmti]
+    file in the same directory is also read. *)
+
 val pp : Format.formatter -> cmt -> unit

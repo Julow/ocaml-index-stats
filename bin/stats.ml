@@ -56,10 +56,9 @@ module Per_declaration = struct
     occ_numbers
 
   let compute (cmts : Ocaml_shape_utils.cmt list)
-      (cmtis : Ocaml_shape_utils.cmt Fpath.Map.t)
       (occs : Ocaml_index_utils.occurrences) =
     let occ_numbers = compute_occurs_number occs in
-    List.map (compute_module cmtis occ_numbers) cmts
+    List.map (compute_module occ_numbers) cmts
 
   let pf ppf fmt = Format.fprintf ppf fmt
   let pp_noop ppf _ = pf ppf ".."

@@ -46,14 +46,21 @@ module Decl = struct
       (decl_kind_to_string tdecl)
 end
 
-type cmt = { unit_name : string; path : Fpath.t; decls : Decl.t list }
+type cmt = {
+  unit_name : string;
+  path : Fpath.t;
+  decls : Decl.t list;
+  intf : Cmi_format.cmi_infos option;
+}
 
-let read_cmt cmt : Decl.t list =
+let read_cmt cmt =
   let module Tbl = Shape.Uid.Tbl in
-  let cmt = Cmt_format.read_cmt cmt in
-  Tbl.fold
-    (fun uid decl acc -> Decl.of_ocaml_decl uid decl :: acc)
-    cmt.cmt_uid_to_decl []
+  let cmi_opt, cmt_opt = Cmt_format.read cmt in
+  let cmt = Option.get cmt_opt in
+  ( Tbl.fold
+      (fun uid decl acc -> Decl.of_ocaml_decl uid decl :: acc)
+      cmt.cmt_uid_to_decl [],
+    cmi_opt )
 
 (* Query a package's lib path using [ocamlfind]. *)
 let package_lib_paths packages =
@@ -73,7 +80,8 @@ let cmts_of_packages ~packages ~units : cmt list =
     let path = Fpath.v fname in
     let unit_name = unit_name_of_path path in
     if Filename.extension fname = ".cmt" && units unit_name then
-      { unit_name; path; decls = read_cmt fname } :: acc
+      let decls, intf = read_cmt fname in
+      { unit_name; path; decls; intf } :: acc
     else acc
   in
   let cmts =
@@ -88,12 +96,18 @@ let cmts_of_packages ~packages ~units : cmt list =
     fail "Found no [.cmt] in packages: %s" (String.concat ", " packages);
   cmts
 
-let cmt_of_path path =
+let cmt_of_path ?(read_cmti = false) path =
   let unit_name = unit_name_of_path path in
-  try Some { unit_name; path; decls = read_cmt (Fpath.to_string path) }
-  with _ -> None
+  let decls, intf = read_cmt (Fpath.to_string path) in
+  let intf =
+    if read_cmti then
+      let cmti = Fpath.(to_string (set_ext ".cmti" path)) in
+      try Some (Cmt_format.read_cmi cmti) with _ -> intf
+    else intf
+  in
+  try Some { unit_name; path; decls; intf } with _ -> None
 
-let pp ppf { unit_name; path; decls } =
+let pp ppf { unit_name; path; decls; intf = _ } =
   Format.fprintf ppf "@[<v 2>%s (at %a) %d decls:@ %a@]" unit_name Fpath.pp path
     (List.length decls)
     (Format.pp_print_list Decl.pp)
