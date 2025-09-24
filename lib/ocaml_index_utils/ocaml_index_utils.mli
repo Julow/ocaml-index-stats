@@ -1,4 +1,10 @@
 open Ocaml_parsing
+open Ocaml_typing
+
+type t
+
+val scan_dune_build_dir : dune_build_dir:string -> t
+val lookup_occurrences : t -> Shape.Uid.t -> Longident.t Location.loc list
 
 type occurrences = ((string * string) * Longident.t Location.loc) list
 

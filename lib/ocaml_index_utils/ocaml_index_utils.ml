@@ -1,11 +1,12 @@
 open Ocaml_parsing
+open Merlin_index_format.Index_format
 
-type occurrences = ((string * string) * Longident.t Location.loc) list
+type t = Lid_set.t Uid_map.t
 
 let fail fmt = Printf.ksprintf failwith fmt
 
 (* Find all the [.ocaml-index] files. *)
-let scan_dune_build_path ~dune_build_dir =
+let scan_index_files ~dune_build_dir =
   match Sys.is_directory dune_build_dir with
   | (exception Sys_error _) | false ->
       fail "Directory %S not found." dune_build_dir
@@ -16,6 +17,23 @@ let scan_dune_build_path ~dune_build_dir =
       match Fs_utils.scan_dir collect_index_files [] dune_build_dir with
       | [] -> failwith "No index found. Please run 'dune build @ocaml-index'."
       | p -> p)
+
+let scan_dune_build_dir ~dune_build_dir =
+  let open Merlin_index_format.Index_format in
+  let paths = scan_index_files ~dune_build_dir in
+  if paths = [] then failwith "Found no index files in '_build'.";
+  List.fold_left
+    (fun acc file ->
+      match read ~file with
+      | Index index ->
+          Uid_map.fold (fun uid locs acc -> add acc uid locs) index.defs acc
+      | _ -> acc)
+    Uid_map.empty paths
+
+let lookup_occurrences t uid =
+  try Lid_set.elements (Uid_map.find uid t) with Not_found -> []
+
+type occurrences = ((string * string) * Longident.t Location.loc) list
 
 let uid_of_unit_name u =
   let open Ocaml_typing in
@@ -89,6 +107,6 @@ let extract_occurrences_of_unit ~lookup_ident paths =
     [] paths
 
 let occurrences ~dune_build_dir ~cmts =
-  let paths = scan_dune_build_path ~dune_build_dir in
+  let paths = scan_index_files ~dune_build_dir in
   let lookup_ident = lookup_ident ~cmts in
   extract_occurrences_of_unit ~lookup_ident paths
