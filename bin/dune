@@ -1,6 +1,7 @@
 (executable
  (name main)
  (libraries
+  cmdliner
   compiler-libs
   merlin-lib.index_format
   merlin-lib.ocaml_typing
