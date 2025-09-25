@@ -16,9 +16,14 @@ let make paths =
       (fun acc p -> Fpath.Set.add (norm p) acc)
       Fpath.Set.empty paths
   in
-  let rec query p =
+  let rec query_path p =
     Fpath.Set.mem p paths
-    || ((not (Fpath.is_current_dir ~prefix:true p)) && query (Fpath.parent p))
+    || (not (Fpath.is_current_dir ~prefix:true p))
+       && query_path (Fpath.parent p)
+  in
+  let query p =
+    query_path p || Fpath.Set.mem (Fpath.set_ext ~multi:true ".ml" p) paths
+    (* Match extensions like ".pp.ml". *)
   in
   query
 
