@@ -1,7 +1,10 @@
 (executable
  (name main)
+ (public_name ocaml-index-stats)
+ (package ocaml-index-stats)
  (libraries
   cmdliner
+  fpath
   compiler-libs
   merlin-lib.index_format
   merlin-lib.ocaml_typing
