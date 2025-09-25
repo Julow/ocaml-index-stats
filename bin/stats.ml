@@ -99,17 +99,16 @@ module Per_declaration = struct
 
   let pf ppf fmt = Format.fprintf ppf fmt
 
-  let pp_occur_modules ppf paths =
-    if Fpath.Set.cardinal paths >= 5 then pf ppf ".."
-    else
-      let pp_sep ppf () = pf ppf ",@ " in
-      Format.pp_print_list ~pp_sep Fpath.pp ppf (Fpath.Set.elements paths)
-
   let pp_occurrences ppf = function
     | Some (n_occurs, path_occurs) ->
         let n_paths = Fpath.Set.cardinal path_occurs in
-        pf ppf "%d occurrences in %d modules:@ @[<hov> %a@]" n_occurs n_paths
-          pp_occur_modules path_occurs
+        pf ppf "%d occurrences in %d modules" n_occurs n_paths;
+        if n_paths > 4 then pf ppf ": .."
+        else if n_paths > 0 then
+          let pp_sep ppf () = pf ppf ",@ " in
+          pf ppf ":@ @[<hov>%a@]"
+            (Format.pp_print_list ~pp_sep Fpath.pp)
+            (Fpath.Set.elements path_occurs)
     | None -> pf ppf "no occurrences found"
 
   let rec pp_decl ~max_width ppf d =
