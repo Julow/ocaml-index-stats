@@ -26,7 +26,7 @@ end
 
 type cmt = {
   unit_name : string;
-  path : Fpath.t;
+  path : string;
   decls : Decl.t list;
   intf : Cmi_format.cmi_infos option;
       (** [None] if a [.mli] is present, unless [~read_cmti:true] is passed. *)

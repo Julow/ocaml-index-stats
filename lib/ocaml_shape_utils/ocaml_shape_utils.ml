@@ -70,22 +70,28 @@ end
 
 type cmt = {
   unit_name : string;
-  path : Fpath.t;
+  path : string;
   decls : Decl.t list;
   intf : Cmi_format.cmi_infos option;
   shape : Shap.t;
 }
 
-let read_cmt cmt =
+let read_cmt fname =
   let module Tbl = Shape.Uid.Tbl in
-  let cmi_opt, cmt_opt = Cmt_format.read cmt in
+  let intf, cmt_opt = Cmt_format.read fname in
   let cmt = Option.get cmt_opt in
-  let shape = Option.value ~default:Shape.dummy_mod cmt.cmt_impl_shape in
-  ( Tbl.fold
+  let decls =
+    Tbl.fold
       (fun uid decl acc -> Decl.of_ocaml_decl uid decl :: acc)
-      cmt.cmt_uid_to_decl [],
-    cmi_opt,
-    shape )
+      cmt.cmt_uid_to_decl []
+  in
+  {
+    unit_name = cmt.cmt_modname;
+    path = Option.value ~default:fname cmt.cmt_sourcefile;
+    decls;
+    intf;
+    shape = Option.value ~default:Shape.dummy_mod cmt.cmt_impl_shape;
+  }
 
 (* Query a package's lib path using [ocamlfind]. *)
 let package_lib_paths packages =
@@ -105,8 +111,7 @@ let cmts_of_packages ~packages ~units : cmt list =
     let path = Fpath.v fname in
     let unit_name = unit_name_of_path path in
     if Filename.extension fname = ".cmt" && units unit_name then
-      let decls, intf, shape = read_cmt fname in
-      { unit_name; path; decls; intf; shape } :: acc
+      read_cmt fname :: acc
     else acc
   in
   let cmts =
@@ -121,19 +126,20 @@ let cmts_of_packages ~packages ~units : cmt list =
     fail "Found no [.cmt] in packages: %s" (String.concat ", " packages);
   cmts
 
-let cmt_of_path ?(read_cmti = false) path =
-  let unit_name = unit_name_of_path path in
-  let decls, intf, shape = read_cmt (Fpath.to_string path) in
-  let intf =
-    if read_cmti then
-      let cmti = Fpath.(to_string (set_ext ".cmti" path)) in
-      try Some (Cmt_format.read_cmi cmti) with _ -> intf
-    else intf
-  in
-  try Some { unit_name; path; decls; intf; shape } with _ -> None
+let cmt_of_path ?(read_cmti = false) cmt_path =
+  match read_cmt (Fpath.to_string cmt_path) with
+  | exception _ -> None
+  | cmt ->
+      let intf =
+        if read_cmti then
+          let cmti = Fpath.(to_string (set_ext ".cmti" cmt_path)) in
+          try Some (Cmt_format.read_cmi cmti) with _ -> cmt.intf
+        else cmt.intf
+      in
+      Some { cmt with intf }
 
 let pp ppf { unit_name; path; decls; intf = _; shape = _ } =
-  Format.fprintf ppf "@[<v 2>%s (at %a) %d decls:@ %a@]" unit_name Fpath.pp path
+  Format.fprintf ppf "@[<v 2>%s (at %s) %d decls:@ %a@]" unit_name path
     (List.length decls)
     (Format.pp_print_list Decl.pp)
     decls
