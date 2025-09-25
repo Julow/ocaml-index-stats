@@ -20,7 +20,6 @@ let scan_local_cmts ~dune_build_dir =
 let () =
   let dune_build_dir = Filename.concat root_dir "_build" in
   let cmts = scan_local_cmts ~dune_build_dir in
-  let occs = Ocaml_index_utils.occurrences ~dune_build_dir ~cmts in
-  let stats = Stats.Per_declaration.compute cmts occs in
-  Format.printf "%d occurrences in %d modules@\n@\n%a" (List.length occs)
-    (List.length cmts) Stats.Per_declaration.pp stats
+  let index = Ocaml_index_utils.scan_dune_build_dir ~dune_build_dir in
+  let stats = Stats.Per_declaration.compute cmts index in
+  Stats.Per_declaration.pp Format.std_formatter stats
