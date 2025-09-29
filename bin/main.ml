@@ -4,7 +4,7 @@ let root_dir = "."
 (** Scan and load all the [.cmt] and [.cmti] files in the given directory tree.
     Pass [~read_cmti:true] so that we can use the interface to filter-out
     internal identifiers. *)
-let scan_cmts_in_dir p =
+let scan_cmts_in_dir ?module_ p =
   let descend_into p =
     match Filename.basename p with
     | ".actions" | ".merlin-conf" | ".formatted" -> false
@@ -14,7 +14,8 @@ let scan_cmts_in_dir p =
   Fs_utils.scan_dir ~descend_into
     (fun acc f ->
       match Filename.extension f with
-      | ".cmt" -> ( match read f with Some cmt -> cmt :: acc | _ -> acc)
+      | ".cmt" -> (
+          match read f with Some cmt -> (cmt, module_) :: acc | _ -> acc)
       | _ -> acc)
     [] (Fpath.to_string p)
 
@@ -22,9 +23,9 @@ let file_exists_and_is_dir p =
   try Sys.is_directory (Fpath.to_string p) with Sys_error _ -> false
 
 (** Guess the path inside Dune's [_build] that correspond to path [p]. *)
-let interpret_cli_path ~dune_build_dir ~cwd p =
+let interpret_cli_path ~dune_build_dir ~cwd (p, module_) =
   let p =
-    let p = Fpath.normalize (Fpath.v p) in
+    let p = Fpath.normalize p in
     if Fpath.is_abs p then
       match Fpath.rem_prefix cwd p with
       | Some p -> p
@@ -32,11 +33,12 @@ let interpret_cli_path ~dune_build_dir ~cwd p =
     else p
   in
   let profile = Fpath.( / ) dune_build_dir "default" in
-  if file_exists_and_is_dir p then scan_cmts_in_dir (Fpath.( // ) profile p)
+  if file_exists_and_is_dir p then
+    scan_cmts_in_dir ?module_ (Fpath.( // ) profile p)
   else
     let p_str = Fpath.to_string p in
-    scan_cmts_in_dir Fpath.(profile // parent p)
-    |> List.filter (fun cmt -> cmt.Ocaml_shape_utils.path = p_str)
+    scan_cmts_in_dir ?module_ Fpath.(profile // parent p)
+    |> List.filter (fun (cmt, _) -> cmt.Ocaml_shape_utils.path = p_str)
 
 (** Interpret the paths given on the command-line. *)
 let interpret_cli_paths ~dune_build_dir paths =
@@ -55,8 +57,28 @@ let main cli_paths =
 open Cmdliner
 
 let arg_paths =
-  let doc = "Paths to modules or to directory to look occurrences for." in
-  Arg.(value & pos_all string [] & info ~doc ~docv:"PATHS.." [])
+  let path_module_conv =
+    let parse s =
+      let p, m =
+        match String.index_opt s ':' with
+        | Some i ->
+            ( String.sub s 0 i,
+              Some (String.sub s (i + 1) (String.length s - i - 1)) )
+        | None -> (s, None)
+      in
+      Result.map (fun p -> (p, m)) (Fpath.of_string p)
+    in
+    let print ppf (p, m) =
+      Format.(
+        fprintf ppf "%a:%a" Fpath.pp p (pp_print_option pp_print_string) m)
+    in
+    Arg.conv ~docv:"PATH:MODULE" (parse, print)
+  in
+  let doc =
+    "Paths to modules or to directory to look occurrences for. You can specify \
+     a submodule with the syntax 'path/to/module.ml:Submodule'."
+  in
+  Arg.(value & pos_all path_module_conv [] & info ~doc [])
 
 let cmd =
   let term = Term.(const main $ arg_paths) in

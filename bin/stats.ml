@@ -83,18 +83,27 @@ module Per_declaration = struct
   and decls_of_signature ~cmt prefix index sg =
     List.filter_map (decl_of_sig_item ~cmt prefix index) sg
 
+  let filter_module = function
+    | Some m ->
+        List.filter (function
+          | { d_ident; d_kind = `Module; _ } -> d_ident = m
+          | _ -> false)
+    | None -> fun d -> d
+
   let compute_module index
-      ({ Ocaml_shape_utils.unit_name; path; intf; shape; _ } as cmt) =
+      (({ Ocaml_shape_utils.unit_name; path; intf; shape; _ } as cmt), module_)
+      =
     let m_decls =
       match intf with
       | Some intf ->
           decls_of_signature ~cmt shape index intf.Cmi_format.cmi_sign
+          |> filter_module module_
       | None -> []
     in
     { m_name = unit_name; m_path = path; m_decls }
 
-  let compute (cmts : Ocaml_shape_utils.cmt list) (index : Ocaml_index_utils.t)
-      =
+  let compute (cmts : (Ocaml_shape_utils.cmt * string option) list)
+      (index : Ocaml_index_utils.t) =
     List.map (compute_module index) cmts
 
   let pf ppf fmt = Format.fprintf ppf fmt
