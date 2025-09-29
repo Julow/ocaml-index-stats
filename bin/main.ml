@@ -22,6 +22,14 @@ let scan_cmts_in_dir ?module_ p =
 let file_exists_and_is_dir p =
   try Sys.is_directory (Fpath.to_string p) with Sys_error _ -> false
 
+let path_match_unit path =
+  let base =
+    String.capitalize_ascii Fpath.(basename (rem_ext ~multi:true path))
+  in
+  let wrapped_base = "__" ^ base in
+  fun unit_name ->
+    base = unit_name || String.ends_with ~suffix:wrapped_base unit_name
+
 (** Guess the path inside Dune's [_build] that correspond to path [p]. *)
 let interpret_cli_path ~dune_build_dir ~cwd (p, module_) =
   let p =
@@ -36,9 +44,11 @@ let interpret_cli_path ~dune_build_dir ~cwd (p, module_) =
   if file_exists_and_is_dir p then
     scan_cmts_in_dir ?module_ (Fpath.( // ) profile p)
   else
-    let p_str = Fpath.to_string p in
+    (* Lookup all the cmts in the directory containing [p] and find the one with
+       the right unit name. TODO: Cache the results of the scans. *)
+    let match_unit = path_match_unit p in
     scan_cmts_in_dir ?module_ Fpath.(profile // parent p)
-    |> List.filter (fun (cmt, _) -> cmt.Ocaml_shape_utils.path = p_str)
+    |> List.filter (fun (cmt, _) -> match_unit cmt.Ocaml_shape_utils.unit_name)
 
 (** Interpret the paths given on the command-line. *)
 let interpret_cli_paths ~dune_build_dir paths =
