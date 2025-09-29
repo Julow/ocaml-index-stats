@@ -1,9 +1,10 @@
+let fail = Format.kasprintf failwith
 let root_dir = "."
 
-(** Scan and load all the [.cmt] and [.cmti] files in Dune's [_build] dir. Pass
-    [~read_cmti:true] so that we can use the interface to filter-out internal
-    identifiers. *)
-let scan_local_cmts ~filter_paths ~dune_build_dir =
+(** Scan and load all the [.cmt] and [.cmti] files in the given directory tree.
+    Pass [~read_cmti:true] so that we can use the interface to filter-out
+    internal identifiers. *)
+let scan_cmts_in_dir p =
   let descend_into p =
     match Filename.basename p with
     | ".actions" | ".merlin-conf" | ".formatted" -> false
@@ -13,24 +14,40 @@ let scan_local_cmts ~filter_paths ~dune_build_dir =
   Fs_utils.scan_dir ~descend_into
     (fun acc f ->
       match Filename.extension f with
-      | ".cmt" -> (
-          match read f with
-          | Some cmt when filter_paths (Fpath.v cmt.path) -> cmt :: acc
-          | _ -> acc)
+      | ".cmt" -> ( match read f with Some cmt -> cmt :: acc | _ -> acc)
       | _ -> acc)
-    [] dune_build_dir
+    [] (Fpath.to_string p)
 
-(* Process modules paths from the CLI. Turn .mli into .ml. *)
-let module_path_of_string p =
-  let p = Fpath.v p in
-  if Fpath.has_ext ".mli" p then Fpath.set_ext ".ml" p else p
+let file_exists_and_is_dir p =
+  try Sys.is_directory (Fpath.to_string p) with Sys_error _ -> false
 
-let main filter_paths =
-  let dune_build_dir = Filename.concat root_dir "_build" in
-  let filter_paths =
-    Filter_paths.make (List.map module_path_of_string filter_paths)
+(** Guess the path inside Dune's [_build] that correspond to path [p]. *)
+let interpret_cli_path ~dune_build_dir ~cwd p =
+  let p =
+    let p = Fpath.normalize (Fpath.v p) in
+    if Fpath.is_abs p then
+      match Fpath.rem_prefix cwd p with
+      | Some p -> p
+      | None -> fail "Path %a is not in the project" Fpath.pp p
+    else p
   in
-  let cmts = scan_local_cmts ~filter_paths ~dune_build_dir in
+  let profile = Fpath.( / ) dune_build_dir "default" in
+  if file_exists_and_is_dir p then scan_cmts_in_dir (Fpath.( // ) profile p)
+  else
+    let p_str = Fpath.to_string p in
+    scan_cmts_in_dir Fpath.(profile // parent p)
+    |> List.filter (fun cmt -> cmt.Ocaml_shape_utils.path = p_str)
+
+(** Interpret the paths given on the command-line. *)
+let interpret_cli_paths ~dune_build_dir paths =
+  let dune_build_dir = Fpath.v dune_build_dir in
+  let cwd = Fpath.v (Sys.getcwd ()) in
+  if paths = [] then scan_cmts_in_dir dune_build_dir
+  else List.concat_map (interpret_cli_path ~dune_build_dir ~cwd) paths
+
+let main cli_paths =
+  let dune_build_dir = Filename.concat root_dir "_build" in
+  let cmts = interpret_cli_paths ~dune_build_dir cli_paths in
   let index = Ocaml_index_utils.scan_dune_build_dir ~dune_build_dir in
   let stats = Stats.Per_declaration.compute cmts index in
   Stats.Per_declaration.pp Format.std_formatter stats
@@ -39,7 +56,7 @@ open Cmdliner
 
 let arg_paths =
   let doc = "Paths to modules or to directory to look occurrences for." in
-  Arg.(value & pos_all file [] & info ~doc ~docv:"PATHS.." [])
+  Arg.(value & pos_all string [] & info ~doc ~docv:"PATHS.." [])
 
 let cmd =
   let term = Term.(const main $ arg_paths) in
