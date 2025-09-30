@@ -18,7 +18,7 @@ module Per_declaration = struct
 
   type decl = {
     d_ident : string;
-    d_occur : (int * Fpath.Set.t) option;
+    d_occur : [ `Occur of int * Fpath.Set.t | `No_uid | `No_occur ];
     d_kind : Kind.t;
     d_subdecls : decl list; (* For modules, module types, etc.. *)
   }
@@ -48,8 +48,13 @@ module Per_declaration = struct
     let open Ocaml_shape_utils.Shap in
     let mk d_kind ident path d_subdecls =
       let d_ident = Ident.name ident in
-      let uid = Ocaml_shape_utils.Shap.reduce path in
-      let d_occur = Option.map (compute_occurrences ~cmt index) uid in
+      let d_occur =
+        match Ocaml_shape_utils.Shap.reduce path with
+        | Some uid ->
+            let n, p = compute_occurrences ~cmt index uid in
+            if n = 0 then `No_occur else `Occur (n, p)
+        | None -> `No_uid
+      in
       Some { d_ident; d_occur; d_kind; d_subdecls }
     in
     match item with
@@ -109,7 +114,7 @@ module Per_declaration = struct
   let pf ppf fmt = Format.fprintf ppf fmt
 
   let pp_occurrences ppf = function
-    | Some (n_occurs, path_occurs) ->
+    | `Occur (n_occurs, path_occurs) ->
         let n_paths = Fpath.Set.cardinal path_occurs in
         pf ppf "%d occurrences in %d modules" n_occurs n_paths;
         if n_paths > 4 then pf ppf ": .."
@@ -118,7 +123,8 @@ module Per_declaration = struct
           pf ppf ":@ @[<hov>%a@]"
             (Format.pp_print_list ~pp_sep Fpath.pp)
             (Fpath.Set.elements path_occurs)
-    | None -> pf ppf "no occurrences found"
+    | `No_occur -> pf ppf "no occurrences found"
+    | `No_uid -> pf ppf "no definition found"
 
   let rec pp_decl ~max_width ppf d =
     pf ppf "@ @[<v 2>@[<hv 4>%-6s %-*s %a@]%a@]" (Kind.to_string d.d_kind)
