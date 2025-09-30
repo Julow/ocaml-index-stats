@@ -24,6 +24,15 @@ module Shap : sig
   val pp : Format.formatter -> t -> unit
 end
 
+module Def_to_decl : sig
+  (** Map definition UIDs (from the interface) to declaration UIDs (from the
+      implementation), that can be looked up in indexes. *)
+
+  type t
+
+  val find : Shape.Uid.t -> t -> Shape.Uid.t option
+end
+
 type cmt = {
   unit_name : string;
   path : string;
@@ -31,6 +40,7 @@ type cmt = {
   intf : Cmi_format.cmi_infos option;
       (** [None] if a [.mli] is present, unless [~read_cmti:true] is passed. *)
   shape : Shap.t;
+  def_to_decl : Def_to_decl.t;
 }
 
 val cmts_of_packages :

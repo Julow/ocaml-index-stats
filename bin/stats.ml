@@ -44,49 +44,49 @@ module Per_declaration = struct
     in
     (List.length occs, paths)
 
-  let rec decl_of_sig_item ~cmt path index item =
-    let open Ocaml_shape_utils.Shap in
-    let mk d_kind ident path d_subdecls =
+  let rec decl_of_sig_item ~cmt index item =
+    let mk d_kind ident uid d_subdecls =
       let d_ident = Ident.name ident in
       let d_occur =
-        match Ocaml_shape_utils.Shap.reduce path with
+        match
+          Ocaml_shape_utils.Def_to_decl.find uid
+            cmt.Ocaml_shape_utils.def_to_decl
+        with
         | Some uid ->
             let n, p = compute_occurrences ~cmt index uid in
             if n = 0 then `No_occur else `Occur (n, p)
-        | None -> `No_uid
+        | None ->
+            Format.eprintf "%a -/> .@\n" Shape.Uid.print uid;
+            `No_uid
       in
       Some { d_ident; d_occur; d_kind; d_subdecls }
     in
     match item with
     | _ when Types.item_visibility item = Hidden -> None
-    | Types.Sig_value (ident, _, _) -> mk `Value ident (value path ident) []
-    | Sig_type (ident, _, _, _) -> mk `Type ident (type_ path ident) []
-    | Sig_typext (ident, _, _, _) ->
-        mk `Typext ident (extension_constructor path ident) []
+    | Types.Sig_value (ident, d, _) -> mk `Value ident d.val_uid []
+    | Sig_type (ident, d, _, _) -> mk `Type ident d.type_uid []
+    | Sig_typext (ident, d, _, _) -> mk `Typext ident d.ext_uid []
     | Sig_module (ident, _, d, _, _) ->
         (* Ignore [Mp_absent]. *)
-        let path = module_ path ident in
-        let subdecls = decls_of_module_type ~cmt path index d.md_type in
-        mk `Module ident path subdecls
+        let subdecls = decls_of_module_type ~cmt index d.md_type in
+        mk `Module ident d.md_uid subdecls
     | Sig_modtype (ident, d, _) ->
-        let path = module_type path ident in
         let subdecls =
           match d.mtd_type with
-          | Some mt -> decls_of_module_type ~cmt path index mt
+          | Some mt -> decls_of_module_type ~cmt index mt
           | None -> []
         in
-        mk `Modtype ident path subdecls
-    | Sig_class (ident, _, _, _) -> mk `Class ident (class_ path ident) []
-    | Sig_class_type (ident, _, _, _) ->
-        mk `Class_type ident (class_type path ident) []
+        mk `Modtype ident d.mtd_uid subdecls
+    | Sig_class (ident, d, _, _) -> mk `Class ident d.cty_uid []
+    | Sig_class_type (ident, d, _, _) -> mk `Class_type ident d.clty_uid []
 
-  and decls_of_module_type ~cmt prefix index = function
-    | Types.Mty_signature sg -> decls_of_signature ~cmt prefix index sg
-    | Mty_functor (_, mt) -> decls_of_module_type ~cmt prefix index mt
+  and decls_of_module_type ~cmt index = function
+    | Types.Mty_signature sg -> decls_of_signature ~cmt index sg
+    | Mty_functor (_, mt) -> decls_of_module_type ~cmt index mt
     | _ -> []
 
-  and decls_of_signature ~cmt prefix index sg =
-    List.filter_map (decl_of_sig_item ~cmt prefix index) sg
+  and decls_of_signature ~cmt index sg =
+    List.filter_map (decl_of_sig_item ~cmt index) sg
 
   let filter_module = function
     | Some m ->
@@ -96,12 +96,11 @@ module Per_declaration = struct
     | None -> fun d -> d
 
   let compute_module index
-      (({ Ocaml_shape_utils.unit_name; path; intf; shape; _ } as cmt), module_)
-      =
+      (({ Ocaml_shape_utils.unit_name; path; intf; _ } as cmt), module_) =
     let m_decls =
       match intf with
       | Some intf ->
-          decls_of_signature ~cmt shape index intf.Cmi_format.cmi_sign
+          decls_of_signature ~cmt index intf.Cmi_format.cmi_sign
           |> filter_module module_
       | None -> []
     in

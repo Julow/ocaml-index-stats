@@ -68,12 +68,43 @@ module Shap = struct
   let pp = Shape.print
 end
 
+module Def_to_decl = struct
+  module M = Shape.Uid.Map
+
+  type t = Shape.Uid.t M.t
+
+  let make =
+    List.fold_left
+      (fun acc (kind, def, decl) ->
+        match kind with
+        | Cmt_format.Definition_to_declaration ->
+            let def = try M.find def acc with Not_found -> def in
+            M.add decl def acc
+        | Declaration_to_declaration ->
+            M.add decl (try M.find def acc with Not_found -> def) acc
+            |> M.add def (try M.find decl acc with Not_found -> decl))
+      M.empty
+
+  let merge =
+    M.merge (fun _ a b ->
+        match (a, b) with
+        | (Some a' as a), Some b' ->
+            if not (Shape.Uid.equal a' b') then
+              Format.eprintf "UID collision@\n";
+            a
+        | (Some _ as a), None -> a
+        | None, b -> b)
+
+  let find = M.find_opt
+end
+
 type cmt = {
   unit_name : string;
   path : string;
   decls : Decl.t list;
   intf : Cmi_format.cmi_infos option;
   shape : Shap.t;
+  def_to_decl : Def_to_decl.t;
 }
 
 let read_cmt fname =
@@ -91,6 +122,7 @@ let read_cmt fname =
     decls;
     intf;
     shape = Option.value ~default:Shape.dummy_mod cmt.cmt_impl_shape;
+    def_to_decl = Def_to_decl.make cmt.cmt_declaration_dependencies;
   }
 
 (* Query a package's lib path using [ocamlfind]. *)
@@ -127,18 +159,21 @@ let cmts_of_packages ~packages ~units : cmt list =
   cmts
 
 let cmt_of_path ?(read_cmti = false) cmt_path =
+  let merge cmt cmti =
+    let def_to_decl = Def_to_decl.merge cmt.def_to_decl cmti.def_to_decl in
+    { cmt with intf = cmti.intf; def_to_decl }
+  in
   match read_cmt (Fpath.to_string cmt_path) with
   | exception _ -> None
   | cmt ->
-      let intf =
-        if read_cmti then
-          let cmti = Fpath.(to_string (set_ext ".cmti" cmt_path)) in
-          try Some (Cmt_format.read_cmi cmti) with _ -> cmt.intf
-        else cmt.intf
-      in
-      Some { cmt with intf }
+      Some
+        (if read_cmti then
+           match read_cmt Fpath.(to_string (set_ext ".cmti" cmt_path)) with
+           | exception _ -> cmt
+           | cmti -> merge cmt cmti
+         else cmt)
 
-let pp ppf { unit_name; path; decls; intf = _; shape = _ } =
+let pp ppf { unit_name; path; decls; intf = _; shape = _; def_to_decl = _ } =
   Format.fprintf ppf "@[<v 2>%s (at %s) %d decls:@ %a@]" unit_name path
     (List.length decls)
     (Format.pp_print_list Decl.pp)
