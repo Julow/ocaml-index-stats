@@ -12,6 +12,7 @@ depends: [
   "cmdliner"
   "fpath"
   "merlin-lib"
+  "ocaml-index" {with-test}
   "odoc" {with-doc}
 ]
 build: [

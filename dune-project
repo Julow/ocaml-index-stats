@@ -16,4 +16,9 @@
 (package
  (name ocaml-index-stats)
  (synopsis "Print occurrences of every items in signatures")
- (depends ocaml cmdliner fpath merlin-lib))
+ (depends
+  ocaml
+  cmdliner
+  fpath
+  merlin-lib
+  (ocaml-index :with-test)))

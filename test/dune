@@ -1,0 +1,5 @@
+(cram
+ (package ocaml-index-stats)
+ (deps
+  %{bin:ocaml-index-stats}
+  (package ocaml-index)))
