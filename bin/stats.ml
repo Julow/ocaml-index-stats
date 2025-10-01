@@ -1,13 +1,9 @@
 open! Ocaml_parsing
 open! Ocaml_typing
 
-type conf = { occpaths_limit : int option }
+type conf = { occpaths : [ `None | `Some | `All ]; diroccurs : bool }
 
-let conf ~occpaths =
-  let occpaths_limit =
-    match occpaths with `None -> Some 0 | `Some -> Some 8 | `All -> None
-  in
-  { occpaths_limit }
+let conf ~occpaths ~diroccurs = { occpaths; diroccurs }
 
 module Per_declaration = struct
   module Kind = struct
@@ -24,12 +20,13 @@ module Per_declaration = struct
       | `Class_type -> "class_type"
   end
 
+  type occurs = int * (Fpath.t * int) list * (Fpath.t * int) list
+  (** Number of occurrences, occurrences per modules, occurrences per
+      directories. *)
+
   type decl = {
     d_ident : string;
-    d_occur :
-      [ `Occur of int * (Fpath.t * int) list
-      | `No_uid
-      | `No_occur of Shape.Uid.t ];
+    d_occur : [ `Occur of occurs | `No_uid | `No_occur of Shape.Uid.t ];
     d_kind : Kind.t;
     d_subdecls : decl list; (* For modules, module types, etc.. *)
   }
@@ -38,6 +35,27 @@ module Per_declaration = struct
   type t = module_ list
 
   let fname_of_lid lid = Fpath.v lid.Location.loc.loc_start.pos_fname
+
+  let occmap_incr map key =
+    Fpath.Map.update key
+      (function None -> Some 1 | Some n -> Some (n + 1))
+      map
+
+  let occmap_to_list map =
+    Fpath.Map.to_list map |> List.sort (fun (_, a) (_, b) -> -Int.compare a b)
+
+  (** Count the occurrences per directory. *)
+  let compute_directory_stats paths =
+    let rec incr_parent acc p =
+      let p = Fpath.parent p in
+      if Fpath.is_current_dir p then acc else incr_parent (occmap_incr acc p) p
+    in
+    List.fold_left (fun acc p -> incr_parent acc p) Fpath.Map.empty paths
+    |> occmap_to_list
+
+  (** Count the occurrences per modules. *)
+  let compute_path_stats occs =
+    List.fold_left occmap_incr Fpath.Map.empty occs |> occmap_to_list
 
   (** Remove occurrences to that are from the same module. *)
   let remove_self_occurrences ~cmt =
@@ -50,19 +68,9 @@ module Per_declaration = struct
       |> List.map fname_of_lid
       |> remove_self_occurrences ~cmt
     in
-    let paths =
-      (* Count occurrences for each modules *)
-      List.fold_left
-        (fun acc p ->
-          Fpath.Map.update p
-            (function None -> Some 1 | Some n -> Some (n + 1))
-            acc)
-        Fpath.Map.empty occs
-      (* Into a list sorted by number of occurrences *)
-      |> Fpath.Map.to_list
-      |> List.sort (fun (_, a) (_, b) -> -Int.compare a b)
-    in
-    (List.length occs, paths)
+    let paths = compute_path_stats occs in
+    let dirs = compute_directory_stats occs in
+    (List.length occs, paths, dirs)
 
   let lookup_decl cmt uid =
     match
@@ -78,8 +86,9 @@ module Per_declaration = struct
       let d_occur =
         match lookup_decl cmt uid with
         | Some uid ->
-            let n, p = compute_occurrences ~cmt index uid in
-            if n = 0 then `No_occur uid else `Occur (n, p)
+            let occ = compute_occurrences ~cmt index uid in
+            let n, _, _ = occ in
+            if n = 0 then `No_occur uid else `Occur occ
         | None -> `No_uid
       in
       Some { d_ident; d_occur; d_kind; d_subdecls }
@@ -135,25 +144,32 @@ module Per_declaration = struct
 
   let pf ppf fmt = Format.fprintf ppf fmt
 
-  (** Avoid printing too many paths with few occurrences. The most important
-      paths are printed first. *)
-  let exceed_occpaths_limit conf depth =
-    match conf.occpaths_limit with Some l -> depth >= l | None -> false
-
-  let rec pp_occurrences_paths conf depth ppf = function
+  let rec pp_occurrences_paths max_depth ppf = function
     | [] -> ()
-    | _ :: _ when exceed_occpaths_limit conf depth -> pf ppf ",@ .."
+    | _ :: _ when max_depth <= 0 -> pf ppf ".."
     | (path, n_occ) :: tl ->
-        if depth >= 1 then pf ppf ",@ ";
         pf ppf "%a (%d)" Fpath.pp path n_occ;
-        pp_occurrences_paths conf (depth + 1) ppf tl
+        if not (List.is_empty tl) then pf ppf ",@ ";
+        pp_occurrences_paths (max_depth - 1) ppf tl
 
   let pp_occurrences conf ppf = function
-    | `Occur (n_occurs, path_occurs) ->
+    | `Occur (n_occurs, path_occurs, dir_occurs) ->
         let n_paths = List.length path_occurs in
         pf ppf "%d occurrences in %d modules" n_occurs n_paths;
-        if n_paths > 0 then
-          pf ppf ":@ @[<hov>%a@]" (pp_occurrences_paths conf 0) path_occurs
+        let max_depth =
+          match conf.occpaths with
+          | `None -> 0
+          | `Some -> 8
+          | `All -> Int.max_int
+        in
+        if n_paths > 0 && max_depth > 0 then
+          pf ppf ":@;<1 2>@[<hov>%a@]"
+            (pp_occurrences_paths max_depth)
+            path_occurs;
+        if conf.diroccurs then
+          pf ppf "@ Occurs in directories:@;<1 2>@[<hov>%a@]"
+            (pp_occurrences_paths max_depth)
+            dir_occurs
     | `No_occur _uid -> pf ppf "no occurrences found"
     | `No_uid -> pf ppf "no definition found"
 
