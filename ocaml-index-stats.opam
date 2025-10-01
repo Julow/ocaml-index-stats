@@ -8,7 +8,7 @@ homepage: "https://github.com/Julow/ocaml-index-stats"
 bug-reports: "https://github.com/Julow/ocaml-index-stats/issues"
 depends: [
   "dune" {>= "3.0"}
-  "ocaml"
+  "ocaml" {>= "5.3"}
   "cmdliner"
   "fpath"
   "merlin-lib"
