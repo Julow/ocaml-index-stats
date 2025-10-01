@@ -57,11 +57,11 @@ let interpret_cli_paths ~dune_build_dir paths =
   if paths = [] then scan_cmts_in_dir dune_build_dir
   else List.concat_map (interpret_cli_path ~dune_build_dir ~cwd) paths
 
-let main occpaths diroccurs cli_paths =
+let main occpaths diroccurs skip_summary cli_paths =
   let dune_build_dir = Filename.concat root_dir "_build" in
   let cmts = interpret_cli_paths ~dune_build_dir cli_paths in
   let index = Ocaml_index_utils.scan_dune_build_dir ~dune_build_dir in
-  let conf = Stats.conf ~occpaths ~diroccurs in
+  let conf = Stats.conf ~occpaths ~diroccurs ~skip_summary in
   let stats = Stats.Per_declaration.compute cmts index in
   Stats.Per_declaration.pp conf Format.std_formatter stats
 
@@ -104,8 +104,15 @@ let opt_diroccurs =
   let doc = "Whether to show a per-directory occurrences count." in
   Arg.(value & flag & info ~doc [ "dirs" ])
 
+let opt_skip_summary =
+  let doc = "Remove the summary printed at the end of each modules." in
+  Arg.(value & flag & info ~doc [ "skip-summary" ])
+
 let cmd =
-  let term = Term.(const main $ opt_occpaths $ opt_diroccurs $ arg_paths) in
+  let term =
+    Term.(
+      const main $ opt_occpaths $ opt_diroccurs $ opt_skip_summary $ arg_paths)
+  in
   let doc =
     "Print occurrences of every items in signatures. Make sure the indexes are \
      available with 'dune build @ocaml-index' first. Must be run with the \

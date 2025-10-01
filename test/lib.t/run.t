@@ -4,6 +4,10 @@
     value  g no occurrences found
   module Lib__A (at lib/a.ml)
     value  f 1 occurrences in 1 modules: lib/b.ml (1)
+  Items of this module are used 1 times in 1 modules:
+    lib/b.ml (1)
+  in these directories:
+    lib/ (1)
   module Lib (at lib/lib.ml-gen)
     module A no definition found
     module B no definition found
