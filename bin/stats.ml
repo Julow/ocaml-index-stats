@@ -59,8 +59,8 @@ module Per_declaration = struct
 
   (** Remove occurrences to that are from the same module. *)
   let remove_self_occurrences ~cmt =
-    let cmt_path = Fpath.v cmt.Ocaml_shape_utils.path in
-    List.filter (fun p -> cmt_path <> p)
+    let cmt_path = Fpath.(rem_ext ~multi:true (v cmt.Ocaml_shape_utils.path)) in
+    List.filter (fun p -> cmt_path <> Fpath.rem_ext ~multi:true p)
 
   let compute_occurrences ~cmt index uid =
     let occs =
