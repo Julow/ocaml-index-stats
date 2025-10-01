@@ -78,9 +78,11 @@ module Def_to_decl = struct
       (fun acc (kind, def, decl) ->
         match kind with
         | Cmt_format.Definition_to_declaration ->
+            (* Format.eprintf "  %a (def)  -> %a@\n" Shape.Uid.print def Shape.Uid.print decl; *)
             let def = try M.find def acc with Not_found -> def in
             M.add decl def acc
         | Declaration_to_declaration ->
+            (* Format.eprintf "  %a (decl) -> %a@\n" Shape.Uid.print def Shape.Uid.print decl; *)
             M.add decl (try M.find def acc with Not_found -> def) acc
             |> M.add def (try M.find decl acc with Not_found -> decl))
       M.empty

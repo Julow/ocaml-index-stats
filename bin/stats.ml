@@ -18,7 +18,8 @@ module Per_declaration = struct
 
   type decl = {
     d_ident : string;
-    d_occur : [ `Occur of int * Fpath.Set.t | `No_uid | `No_occur ];
+    d_occur :
+      [ `Occur of int * Fpath.Set.t | `No_uid | `No_occur of Shape.Uid.t ];
     d_kind : Kind.t;
     d_subdecls : decl list; (* For modules, module types, etc.. *)
   }
@@ -44,20 +45,23 @@ module Per_declaration = struct
     in
     (List.length occs, paths)
 
+  let lookup_decl cmt uid =
+    match
+      ( Ocaml_shape_utils.Def_to_decl.find uid cmt.Ocaml_shape_utils.def_to_decl,
+        uid )
+    with
+    | None, Item { from = Unit_info.Intf; _ } -> Some uid
+    | r, _ -> r
+
   let rec decl_of_sig_item ~cmt index item =
     let mk d_kind ident uid d_subdecls =
       let d_ident = Ident.name ident in
       let d_occur =
-        match
-          Ocaml_shape_utils.Def_to_decl.find uid
-            cmt.Ocaml_shape_utils.def_to_decl
-        with
+        match lookup_decl cmt uid with
         | Some uid ->
             let n, p = compute_occurrences ~cmt index uid in
-            if n = 0 then `No_occur else `Occur (n, p)
-        | None ->
-            Format.eprintf "%a -/> .@\n" Shape.Uid.print uid;
-            `No_uid
+            if n = 0 then `No_occur uid else `Occur (n, p)
+        | None -> `No_uid
       in
       Some { d_ident; d_occur; d_kind; d_subdecls }
     in
@@ -122,7 +126,7 @@ module Per_declaration = struct
           pf ppf ":@ @[<hov>%a@]"
             (Format.pp_print_list ~pp_sep Fpath.pp)
             (Fpath.Set.elements path_occurs)
-    | `No_occur -> pf ppf "no occurrences found"
+    | `No_occur _uid -> pf ppf "no occurrences found"
     | `No_uid -> pf ppf "no definition found"
 
   let rec pp_decl ~max_width ppf d =

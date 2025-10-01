@@ -5,6 +5,7 @@ type t
 
 val scan_dune_build_dir : dune_build_dir:string -> t
 val lookup_occurrences : t -> Shape.Uid.t -> Longident.t Location.loc list
+val pp : Format.formatter -> t -> unit
 
 type occurrences = ((string * string) * Longident.t Location.loc) list
 

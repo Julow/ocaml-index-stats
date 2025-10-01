@@ -1,4 +1,5 @@
 open Ocaml_parsing
+open Ocaml_typing
 open Merlin_index_format.Index_format
 
 type t = Lid_set.t Uid_map.t
@@ -32,6 +33,12 @@ let scan_dune_build_dir ~dune_build_dir =
 
 let lookup_occurrences t uid =
   try Lid_set.elements (Uid_map.find uid t) with Not_found -> []
+
+let pp ppf t =
+  Uid_map.iter
+    (fun uid lids ->
+      Format.fprintf ppf "%a (%d)@," Shape.Uid.print uid (Lid_set.cardinal lids))
+    t
 
 type occurrences = ((string * string) * Longident.t Location.loc) list
 

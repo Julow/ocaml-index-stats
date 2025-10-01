@@ -32,16 +32,8 @@
     module Map        no definition found
   module Main (at main.ml)
     module M       no definition found
-      type   t     no definition found
-      type   key   no definition found
-      value  empty no definition found
-      value  add   no definition found
+      type   t     4 occurrences in 1 modules: functor/map.mli
+      type   key   1 occurrences in 1 modules: functor/map.mli
+      value  empty 1 occurrences in 1 modules: functor/map.mli
+      value  add   1 occurrences in 1 modules: functor/map.mli
     value  of_list no definition found
-  Functor.0 -/> .
-  Functor.1 -/> .
-  [intf]Functor__Map.0 -/> .
-  [intf]Functor__Map.7 -/> .
-  [intf]Functor__Map.2 -/> .
-  [intf]Functor__Map.3 -/> .
-  Main.1 -/> .
-  Main.2 -/> .

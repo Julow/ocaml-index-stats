@@ -7,5 +7,3 @@
   module Lib (at lib/lib.ml-gen)
     module A no definition found
     module B no definition found
-  Lib.0 -/> .
-  Lib.1 -/> .
