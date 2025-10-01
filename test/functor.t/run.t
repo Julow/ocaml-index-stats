@@ -6,7 +6,7 @@
       type   key   no occurrences found
       value  empty no occurrences found
       value  add   no occurrences found
-    module Make 1 occurrences in 1 modules: main.ml
+    module Make 1 occurrences in 1 modules: main.ml (1)
       type   t     no occurrences found
       type   key   no occurrences found
       value  empty no occurrences found
@@ -32,8 +32,8 @@
     module Map        no definition found
   module Main (at main.ml)
     module M       no definition found
-      type   t     4 occurrences in 1 modules: functor/map.mli
-      type   key   1 occurrences in 1 modules: functor/map.mli
-      value  empty 1 occurrences in 1 modules: functor/map.mli
-      value  add   1 occurrences in 1 modules: functor/map.mli
+      type   t     4 occurrences in 1 modules: functor/map.mli (4)
+      type   key   1 occurrences in 1 modules: functor/map.mli (1)
+      value  empty 1 occurrences in 1 modules: functor/map.mli (1)
+      value  add   1 occurrences in 1 modules: functor/map.mli (1)
     value  of_list no definition found

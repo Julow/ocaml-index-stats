@@ -19,7 +19,9 @@ module Per_declaration = struct
   type decl = {
     d_ident : string;
     d_occur :
-      [ `Occur of int * Fpath.Set.t | `No_uid | `No_occur of Shape.Uid.t ];
+      [ `Occur of int * (Fpath.t * int) list
+      | `No_uid
+      | `No_occur of Shape.Uid.t ];
     d_kind : Kind.t;
     d_subdecls : decl list; (* For modules, module types, etc.. *)
   }
@@ -27,21 +29,30 @@ module Per_declaration = struct
   type module_ = { m_name : string; m_path : string; m_decls : decl list }
   type t = module_ list
 
-  let fname_of_lid lid = lid.Location.loc.loc_start.pos_fname
+  let fname_of_lid lid = Fpath.v lid.Location.loc.loc_start.pos_fname
 
   (** Remove occurrences to that are from the same module. *)
   let remove_self_occurrences ~cmt =
-    List.filter (fun lid -> cmt.Ocaml_shape_utils.path <> fname_of_lid lid)
+    let cmt_path = Fpath.v cmt.Ocaml_shape_utils.path in
+    List.filter (fun p -> cmt_path <> p)
 
   let compute_occurrences ~cmt index uid =
     let occs =
       Ocaml_index_utils.lookup_occurrences index uid
+      |> List.map fname_of_lid
       |> remove_self_occurrences ~cmt
     in
     let paths =
+      (* Count occurrences for each modules *)
       List.fold_left
-        (fun acc lid -> Fpath.Set.add (Fpath.v (fname_of_lid lid)) acc)
-        Fpath.Set.empty occs
+        (fun acc p ->
+          Fpath.Map.update p
+            (function None -> Some 1 | Some n -> Some (n + 1))
+            acc)
+        Fpath.Map.empty occs
+      (* Into a list sorted by number of occurrences *)
+      |> Fpath.Map.to_list
+      |> List.sort (fun (_, a) (_, b) -> -Int.compare a b)
     in
     (List.length occs, paths)
 
@@ -116,16 +127,24 @@ module Per_declaration = struct
 
   let pf ppf fmt = Format.fprintf ppf fmt
 
+  (** Avoid printing too many paths with few occurrences. The most important
+      paths are printed first. *)
+  let max_printed_paths = 8
+
+  let rec pp_occurrences_paths depth ppf = function
+    | [] -> ()
+    | _ :: _ when depth >= max_printed_paths -> pf ppf ",@ .."
+    | (path, n_occ) :: tl ->
+        if depth >= 1 then pf ppf ",@ ";
+        pf ppf "%a (%d)" Fpath.pp path n_occ;
+        pp_occurrences_paths (depth + 1) ppf tl
+
   let pp_occurrences ppf = function
     | `Occur (n_occurs, path_occurs) ->
-        let n_paths = Fpath.Set.cardinal path_occurs in
+        let n_paths = List.length path_occurs in
         pf ppf "%d occurrences in %d modules" n_occurs n_paths;
-        if n_paths > 4 then pf ppf ": .."
-        else if n_paths > 0 then
-          let pp_sep ppf () = pf ppf ",@ " in
-          pf ppf ":@ @[<hov>%a@]"
-            (Format.pp_print_list ~pp_sep Fpath.pp)
-            (Fpath.Set.elements path_occurs)
+        if n_paths > 0 then
+          pf ppf ":@ @[<hov>%a@]" (pp_occurrences_paths 0) path_occurs
     | `No_occur _uid -> pf ppf "no occurrences found"
     | `No_uid -> pf ppf "no definition found"
 
