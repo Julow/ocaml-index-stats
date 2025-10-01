@@ -1,6 +1,14 @@
 open! Ocaml_parsing
 open! Ocaml_typing
 
+type conf = { occpaths_limit : int option }
+
+let conf ~occpaths =
+  let occpaths_limit =
+    match occpaths with `None -> Some 0 | `Some -> Some 8 | `All -> None
+  in
+  { occpaths_limit }
+
 module Per_declaration = struct
   module Kind = struct
     type t =
@@ -129,39 +137,41 @@ module Per_declaration = struct
 
   (** Avoid printing too many paths with few occurrences. The most important
       paths are printed first. *)
-  let max_printed_paths = 8
+  let exceed_occpaths_limit conf depth =
+    match conf.occpaths_limit with Some l -> depth >= l | None -> false
 
-  let rec pp_occurrences_paths depth ppf = function
+  let rec pp_occurrences_paths conf depth ppf = function
     | [] -> ()
-    | _ :: _ when depth >= max_printed_paths -> pf ppf ",@ .."
+    | _ :: _ when exceed_occpaths_limit conf depth -> pf ppf ",@ .."
     | (path, n_occ) :: tl ->
         if depth >= 1 then pf ppf ",@ ";
         pf ppf "%a (%d)" Fpath.pp path n_occ;
-        pp_occurrences_paths (depth + 1) ppf tl
+        pp_occurrences_paths conf (depth + 1) ppf tl
 
-  let pp_occurrences ppf = function
+  let pp_occurrences conf ppf = function
     | `Occur (n_occurs, path_occurs) ->
         let n_paths = List.length path_occurs in
         pf ppf "%d occurrences in %d modules" n_occurs n_paths;
         if n_paths > 0 then
-          pf ppf ":@ @[<hov>%a@]" (pp_occurrences_paths 0) path_occurs
+          pf ppf ":@ @[<hov>%a@]" (pp_occurrences_paths conf 0) path_occurs
     | `No_occur _uid -> pf ppf "no occurrences found"
     | `No_uid -> pf ppf "no definition found"
 
-  let rec pp_decl ~max_width ppf d =
+  let rec pp_decl ~max_width conf ppf d =
     pf ppf "@ @[<v 2>@[<hv 4>%-6s %-*s %a@]%a@]" (Kind.to_string d.d_kind)
-      max_width d.d_ident pp_occurrences d.d_occur pp_decls d.d_subdecls
+      max_width d.d_ident (pp_occurrences conf) d.d_occur (pp_decls conf)
+      d.d_subdecls
 
-  and pp_decls ppf ds =
+  and pp_decls conf ppf ds =
     let max_width =
       List.fold_left (fun acc d -> max acc (String.length d.d_ident)) 0 ds
     in
-    List.iter (pp_decl ~max_width ppf) ds
+    List.iter (pp_decl ~max_width conf ppf) ds
 
-  let pp ppf t =
+  let pp conf ppf t =
     List.iter
       (fun m ->
-        pf ppf "@[<v 2>module %s (at %s)%a@]@\n" m.m_name m.m_path pp_decls
-          m.m_decls)
+        pf ppf "@[<v 2>module %s (at %s)%a@]@\n" m.m_name m.m_path
+          (pp_decls conf) m.m_decls)
       t
 end

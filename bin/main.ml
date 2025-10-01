@@ -57,12 +57,13 @@ let interpret_cli_paths ~dune_build_dir paths =
   if paths = [] then scan_cmts_in_dir dune_build_dir
   else List.concat_map (interpret_cli_path ~dune_build_dir ~cwd) paths
 
-let main cli_paths =
+let main occpaths cli_paths =
   let dune_build_dir = Filename.concat root_dir "_build" in
   let cmts = interpret_cli_paths ~dune_build_dir cli_paths in
   let index = Ocaml_index_utils.scan_dune_build_dir ~dune_build_dir in
+  let conf = Stats.conf ~occpaths in
   let stats = Stats.Per_declaration.compute cmts index in
-  Stats.Per_declaration.pp Format.std_formatter stats
+  Stats.Per_declaration.pp conf Format.std_formatter stats
 
 open Cmdliner
 
@@ -90,8 +91,17 @@ let arg_paths =
   in
   Arg.(value & pos_all path_module_conv [] & info ~doc [])
 
+let opt_occpaths =
+  let doc =
+    "How to show the list of occurrences. Valid values are 'none' to remove \
+     the list of occurrences, 'some' to show an elided list starting with the \
+     paths with the most occurrences, 'all' to show an exhaustive list."
+  in
+  let c = Arg.enum [ ("none", `None); ("some", `Some); ("all", `All) ] in
+  Arg.(value & opt c `Some & info ~doc [ "paths" ])
+
 let cmd =
-  let term = Term.(const main $ arg_paths) in
+  let term = Term.(const main $ opt_occpaths $ arg_paths) in
   let doc =
     "Print occurrences of every items in signatures. Make sure the indexes are \
      available with 'dune build @ocaml-index' first. Must be run with the \
