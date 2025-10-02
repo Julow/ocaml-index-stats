@@ -9,5 +9,5 @@
   in these directories:
     lib/ (1)
   module Lib (at lib/lib.ml-gen)
-    module A no definition found
-    module B no definition found
+    module A no occurrences found
+    module B no occurrences found

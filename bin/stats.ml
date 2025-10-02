@@ -93,34 +93,33 @@ module Per_declaration = struct
     let cmt_path = Fpath.(rem_ext ~multi:true (v cmt.Ocaml_shape_utils.path)) in
     List.filter (fun p -> cmt_path <> Fpath.rem_ext ~multi:true p)
 
-  let compute_occurrences ~cmt index uid =
+  let compute_occurrences ~cmt index uids =
     let occs =
-      Ocaml_index_utils.lookup_occurrences index uid
-      |> List.map fname_of_lid
-      |> remove_self_occurrences ~cmt
+      List.concat_map
+        (fun uid ->
+          Ocaml_index_utils.lookup_occurrences index uid
+          |> List.map fname_of_lid
+          |> remove_self_occurrences ~cmt)
+        uids
     in
     let paths = compute_path_stats occs in
     let dirs = compute_directory_stats paths in
     (List.length occs, paths, dirs)
 
   let lookup_decl cmt uid =
-    match
-      ( Ocaml_shape_utils.Def_to_decl.find uid cmt.Ocaml_shape_utils.def_to_decl,
-        uid )
-    with
-    | None, Item { from = Unit_info.Intf; _ } -> Some uid
-    | r, _ -> r
+    uid
+    :: Ocaml_shape_utils.Def_to_decl.find uid cmt.Ocaml_shape_utils.def_to_decl
 
   let rec decl_of_sig_item ~cmt index item =
     let mk d_kind ident uid d_subdecls =
       let d_ident = Ident.name ident in
       let d_occur =
         match lookup_decl cmt uid with
-        | Some uid ->
-            let occ = compute_occurrences ~cmt index uid in
+        | [] -> `No_uid
+        | uids ->
+            let occ = compute_occurrences ~cmt index uids in
             let n, _, _ = occ in
             if n = 0 then `No_occur uid else `Occur occ
-        | None -> `No_uid
       in
       let d_summary = aggregate_summary d_subdecls in
       Some { d_ident; d_occur; d_kind; d_subdecls; d_summary }

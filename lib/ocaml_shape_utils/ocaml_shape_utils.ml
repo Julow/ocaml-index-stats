@@ -71,33 +71,24 @@ end
 module Def_to_decl = struct
   module M = Shape.Uid.Map
 
-  type t = Shape.Uid.t M.t
+  type t = Shape.Uid.t list M.t
 
   let make =
     List.fold_left
-      (fun acc (kind, def, decl) ->
-        match kind with
-        | Cmt_format.Definition_to_declaration ->
-            (* Format.eprintf "  %a (def)  -> %a@\n" Shape.Uid.print def Shape.Uid.print decl; *)
-            let def = try M.find def acc with Not_found -> def in
-            M.add decl def acc
-        | Declaration_to_declaration ->
-            (* Format.eprintf "  %a (decl) -> %a@\n" Shape.Uid.print def Shape.Uid.print decl; *)
-            M.add decl (try M.find def acc with Not_found -> def) acc
-            |> M.add def (try M.find decl acc with Not_found -> decl))
+      (fun acc (_kind, def, decl) ->
+        (* Format.eprintf "  %a -> %a@\n" Shape.Uid.print def Shape.Uid.print decl; *)
+        M.add_to_list decl def acc |> M.add_to_list def decl)
       M.empty
 
   let merge =
     M.merge (fun _ a b ->
         match (a, b) with
-        | (Some a' as a), Some b' ->
-            if not (Shape.Uid.equal a' b') then
-              Format.eprintf "UID collision@\n";
-            a
+        | Some a, Some b ->
+            Some (List.sort_uniq Shape.Uid.compare (List.rev_append a b))
         | (Some _ as a), None -> a
         | None, b -> b)
 
-  let find = M.find_opt
+  let find key t = try M.find key t with Not_found -> []
 end
 
 type cmt = {

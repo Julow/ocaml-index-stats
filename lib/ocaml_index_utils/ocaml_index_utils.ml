@@ -34,10 +34,19 @@ let scan_dune_build_dir ~dune_build_dir =
 let lookup_occurrences t uid =
   try Lid_set.elements (Uid_map.find uid t) with Not_found -> []
 
+let pp_lids =
+  let pp_lid ppf lid =
+    let l = lid.Location.loc.loc_start in
+    Format.fprintf ppf "%s:%d" l.pos_fname l.pos_lnum
+  in
+  let pp_sep ppf () = Format.fprintf ppf ",@ " in
+  Format.pp_print_list ~pp_sep pp_lid
+
 let pp ppf t =
   Uid_map.iter
     (fun uid lids ->
-      Format.fprintf ppf "%a (%d)@," Shape.Uid.print uid (Lid_set.cardinal lids))
+      Format.fprintf ppf "@[<hov 2>%a (%d):@ %a@]@\n" Shape.Uid.print uid
+        (Lid_set.cardinal lids) pp_lids (Lid_set.to_list lids))
     t
 
 type occurrences = ((string * string) * Longident.t Location.loc) list

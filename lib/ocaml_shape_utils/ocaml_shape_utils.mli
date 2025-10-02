@@ -30,7 +30,7 @@ module Def_to_decl : sig
 
   type t
 
-  val find : Shape.Uid.t -> t -> Shape.Uid.t option
+  val find : Shape.Uid.t -> t -> Shape.Uid.t list
 end
 
 type cmt = {
