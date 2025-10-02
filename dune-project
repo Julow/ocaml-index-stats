@@ -21,5 +21,6 @@
    (>= 5.3))
   cmdliner
   fpath
-  merlin-lib
+  (merlin-lib
+   (>= 5.5))
   (ocaml-index :with-test)))

@@ -7,5 +7,3 @@
   merlin-lib.index_format
   merlin-lib.ocaml_typing
   fs_utils))
-
-(include_subdirs unqualified)

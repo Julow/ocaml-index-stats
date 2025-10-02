@@ -29,13 +29,15 @@ let scan_dune_build_dir ~dune_build_dir =
       | Index index ->
           Uid_map.fold (fun uid locs acc -> add acc uid locs) index.defs acc
       | _ -> acc)
-    Uid_map.empty paths
+    (Uid_map.empty ()) paths
 
 let lookup_occurrences t uid =
-  try Lid_set.elements (Uid_map.find uid t) with Not_found -> []
+  try List.map Lid.to_lid (Lid_set.elements (Uid_map.find uid t))
+  with Not_found -> []
 
 let pp_lids =
   let pp_lid ppf lid =
+    let lid = Lid.to_lid lid in
     let l = lid.Location.loc.loc_start in
     Format.fprintf ppf "%s:%d" l.pos_fname l.pos_lnum
   in
@@ -46,7 +48,7 @@ let pp ppf t =
   Uid_map.iter
     (fun uid lids ->
       Format.fprintf ppf "@[<hov 2>%a (%d):@ %a@]@\n" Shape.Uid.print uid
-        (Lid_set.cardinal lids) pp_lids (Lid_set.to_list lids))
+        (Lid_set.cardinal lids) pp_lids (Lid_set.elements lids))
     t
 
 type occurrences = ((string * string) * Longident.t Location.loc) list
@@ -80,7 +82,7 @@ let lookup_ident ~cmts =
     | None -> `Not_found
 
 let pp_lid_without_location ppf lid =
-  let { Location.txt; _ } = Compat.merlin_lid lid in
+  let { Location.txt; _ } = Lid.to_lid lid in
   Pprintast.longident ppf txt
 
 (* Read the index files in [paths] and extract occurrences informations for
@@ -101,7 +103,7 @@ let extract_occurrences_of_unit ~lookup_ident paths =
               | `Found ident ->
                   Lid_set.elements locs
                   |> List.fold_left
-                       (fun acc lid -> (ident, Compat.merlin_lid lid) :: acc)
+                       (fun acc lid -> (ident, Lid.to_lid lid) :: acc)
                        acc
               | `Ignore -> (* Not a value *) acc
               | `Not_found -> (
