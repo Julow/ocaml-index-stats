@@ -5,10 +5,12 @@ type conf = {
   occpaths : [ `None | `Some | `All ];
   diroccurs : bool;
   skip_summary : bool;
+  only_values : bool;
+      (** Module and module types are kept but with occurrences data removed. *)
 }
 
-let conf ~occpaths ~diroccurs ~skip_summary =
-  { occpaths; diroccurs; skip_summary }
+let conf ~occpaths ~diroccurs ~skip_summary ~only_values =
+  { occpaths; diroccurs; skip_summary; only_values }
 
 module Per_declaration = struct
   module Kind = struct
@@ -31,7 +33,8 @@ module Per_declaration = struct
 
   type decl = {
     d_ident : string;
-    d_occur : [ `Occur of occurs | `No_uid | `No_occur of Shape.Uid.t ];
+    d_occur :
+      [ `Occur of occurs | `No_uid | `No_occur of Shape.Uid.t | `Occur_removed ];
     d_kind : Kind.t;
     d_subdecls : decl list;  (** For modules, module types, etc.. *)
     d_summary : occurs;  (** Aggregate occurrences of all the sub decls. *)
@@ -110,16 +113,28 @@ module Per_declaration = struct
     uid
     :: Ocaml_shape_utils.Def_to_decl.find uid cmt.Ocaml_shape_utils.def_to_decl
 
-  let rec decl_of_sig_item ~cmt index item =
+  let rec decl_of_sig_item conf ~cmt index item =
     let mk d_kind ident uid d_subdecls =
       let d_ident = Ident.name ident in
+      let d_subdecls =
+        if conf.only_values then
+          List.filter
+            (fun d ->
+              match d.d_kind with
+              | `Value | `Module | `Modtype -> true
+              | _ -> false)
+            d_subdecls
+        else d_subdecls
+      in
       let d_occur =
-        match lookup_decl cmt uid with
-        | [] -> `No_uid
-        | uids ->
-            let occ = compute_occurrences ~cmt index uids in
-            let n, _, _ = occ in
-            if n = 0 then `No_occur uid else `Occur occ
+        if conf.only_values && d_kind <> `Value then `Occur_removed
+        else
+          match lookup_decl cmt uid with
+          | [] -> `No_uid
+          | uids ->
+              let occ = compute_occurrences ~cmt index uids in
+              let n, _, _ = occ in
+              if n = 0 then `No_occur uid else `Occur occ
       in
       let d_summary = aggregate_summary d_subdecls in
       Some { d_ident; d_occur; d_kind; d_subdecls; d_summary }
@@ -131,25 +146,25 @@ module Per_declaration = struct
     | Sig_typext (ident, d, _, _) -> mk `Typext ident d.ext_uid []
     | Sig_module (ident, _, d, _, _) ->
         (* Ignore [Mp_absent]. *)
-        let subdecls = decls_of_module_type ~cmt index d.md_type in
+        let subdecls = decls_of_module_type conf ~cmt index d.md_type in
         mk `Module ident d.md_uid subdecls
     | Sig_modtype (ident, d, _) ->
         let subdecls =
           match d.mtd_type with
-          | Some mt -> decls_of_module_type ~cmt index mt
+          | Some mt -> decls_of_module_type conf ~cmt index mt
           | None -> []
         in
         mk `Modtype ident d.mtd_uid subdecls
     | Sig_class (ident, d, _, _) -> mk `Class ident d.cty_uid []
     | Sig_class_type (ident, d, _, _) -> mk `Class_type ident d.clty_uid []
 
-  and decls_of_module_type ~cmt index = function
-    | Types.Mty_signature sg -> decls_of_signature ~cmt index sg
-    | Mty_functor (_, mt) -> decls_of_module_type ~cmt index mt
+  and decls_of_module_type conf ~cmt index = function
+    | Types.Mty_signature sg -> decls_of_signature conf ~cmt index sg
+    | Mty_functor (_, mt) -> decls_of_module_type conf ~cmt index mt
     | _ -> []
 
-  and decls_of_signature ~cmt index sg =
-    List.filter_map (decl_of_sig_item ~cmt index) sg
+  and decls_of_signature conf ~cmt index sg =
+    List.filter_map (decl_of_sig_item conf ~cmt index) sg
 
   let filter_module = function
     | Some m ->
@@ -158,21 +173,21 @@ module Per_declaration = struct
           | _ -> false)
     | None -> fun d -> d
 
-  let compute_module index
+  let compute_module conf index
       (({ Ocaml_shape_utils.unit_name; path; intf; _ } as cmt), module_) =
     let m_decls =
       match intf with
       | Some intf ->
-          decls_of_signature ~cmt index intf.Cmi_format.cmi_sign
+          decls_of_signature conf ~cmt index intf.Cmi_format.cmi_sign
           |> filter_module module_
       | None -> []
     in
     let m_summary = aggregate_summary m_decls in
     { m_name = unit_name; m_path = path; m_decls; m_summary }
 
-  let compute (cmts : (Ocaml_shape_utils.cmt * string option) list)
+  let compute conf (cmts : (Ocaml_shape_utils.cmt * string option) list)
       (index : Ocaml_index_utils.t) =
-    List.map (compute_module index) cmts
+    List.map (compute_module conf index) cmts
 
   let pf ppf fmt = Format.fprintf ppf fmt
 
@@ -204,6 +219,7 @@ module Per_declaration = struct
             dir_occurs
     | `No_occur _uid -> pf ppf "no occurrences found"
     | `No_uid -> pf ppf "no definition found"
+    | `Occur_removed -> ()
 
   let pp_summary conf ppf (n_occ, paths, dirs) =
     if (not conf.skip_summary) && n_occ > 0 then
