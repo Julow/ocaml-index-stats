@@ -4,7 +4,7 @@ let root_dir = "."
 (** Scan and load all the [.cmt] and [.cmti] files in the given directory tree.
     Pass [~read_cmti:true] so that we can use the interface to filter-out
     internal identifiers. *)
-let scan_cmts_in_dir ?module_ p =
+let scan_cmts_in_dir ?(filter_unit = fun _ -> true) ?module_ p =
   let descend_into p =
     match Filename.basename p with
     | ".actions" | ".merlin-conf" | ".formatted" -> false
@@ -14,6 +14,7 @@ let scan_cmts_in_dir ?module_ p =
   Fs_utils.scan_dir ~descend_into
     (fun acc f ->
       match Filename.extension f with
+      | ".cmt" when not (filter_unit f) -> acc
       | ".cmt" -> (
           match read f with Some cmt -> (cmt, module_) :: acc | _ -> acc)
       | _ -> acc)
@@ -22,13 +23,19 @@ let scan_cmts_in_dir ?module_ p =
 let file_exists_and_is_dir p =
   try Sys.is_directory (Fpath.to_string p) with Sys_error _ -> false
 
-let path_match_unit path =
-  let base =
-    String.capitalize_ascii Fpath.(basename (rem_ext ~multi:true path))
-  in
+let unit_name_of_path path = Fpath.(basename (rem_ext ~multi:true path))
+
+let unit_match_unit base =
+  let base = String.capitalize_ascii base in
   let wrapped_base = "__" ^ base in
   fun unit_name ->
     base = unit_name || String.ends_with ~suffix:wrapped_base unit_name
+
+let path_match_unit path = unit_match_unit (unit_name_of_path path)
+
+let unit_match_path unit =
+  let match_unit = unit_match_unit unit in
+  fun path -> match_unit (unit_name_of_path (Fpath.v path))
 
 (** Guess the path inside Dune's [_build] that correspond to path [p]. *)
 let interpret_cli_path ~dune_build_dir ~cwd (p, module_) =
@@ -42,7 +49,11 @@ let interpret_cli_path ~dune_build_dir ~cwd (p, module_) =
   in
   let profile = Fpath.( / ) dune_build_dir "default" in
   if file_exists_and_is_dir p then
-    scan_cmts_in_dir ?module_ (Fpath.( // ) profile p)
+    (* CLI path is a directory. The [module_] part matches the cmt's names. *)
+    let filter_unit =
+      match module_ with Some m -> Some (unit_match_path m) | None -> None
+    in
+    scan_cmts_in_dir ?filter_unit (Fpath.( // ) profile p)
   else
     (* Lookup all the cmts in the directory containing [p] and find the one with
        the right unit name. TODO: Cache the results of the scans. *)
