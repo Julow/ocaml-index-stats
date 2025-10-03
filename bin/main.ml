@@ -58,7 +58,8 @@ let interpret_cli_path ~dune_build_dir ~cwd (p, module_) =
     (* Lookup all the cmts in the directory containing [p] and find the one with
        the right unit name. TODO: Cache the results of the scans. *)
     let match_unit = path_match_unit p in
-    scan_cmts_in_dir ?module_ Fpath.(profile // parent p)
+    let filter_unit = unit_match_path (unit_name_of_path p) in
+    scan_cmts_in_dir ~filter_unit ?module_ Fpath.(profile // parent p)
     |> List.filter (fun (cmt, _) -> match_unit cmt.Ocaml_shape_utils.unit_name)
 
 (** Interpret the paths given on the command-line. *)
